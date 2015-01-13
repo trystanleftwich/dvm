@@ -119,12 +119,56 @@ docker_ip() {
   echo "${DOCKER_IP:-192.168.42.43}"
 }
 
+docker_cert_path() {
+  load_conf
+  echo "${DOCKER_CERT_PATH:-$HOME/.docker}"
+}
+
+docker_tls() {
+  load_conf
+  echo "${DOCKER_TLS:-yes}"
+}
+
+copy_certs() {
+  if [ `dvm status | grep -c running` -gt 0 ]; then
+    OPTIONS=$(dvm ssh-config | grep -v '^Host ' | awk -v ORS=' ' 'NF{print "-o " $1 "=" $2}')
+    HOST=$(dvm ssh-config | grep HostName | awk '{print $NF}')
+    if [ ! -d $(docker_cert_path) ]; then
+          mkdir $(docker_cert_path)
+    fi
+    if (ssh ${OPTIONS} $HOST "[ -d /home/docker/.docker ]"); then
+      scp -q ${OPTIONS} $HOST:/home/docker/.docker/*.pem $(docker_cert_path)/
+    fi
+    # If no .pem files exist, assume that TLS is off
+    if [ $(ls $(docker_cert_path)/ | wc -l) -eq 0 ]; then
+        DOCKER_TLS=no
+    fi
+  fi
+}
+
 setup_env() {
   load_conf
+  if [[ $(docker_tls) == 'yes' ]]; then
+      copy_certs
+      DOCKER_PORT=2376
+  fi
   if [[ $SHELL =~ .*fish$ ]] ; then
     echo "set -x DOCKER_HOST tcp://$(docker_ip):${DOCKER_PORT:-2375}"
+    if [[ $(docker_tls) == 'yes' ]]; then
+       echo "set -x DOCKER_TLS_VERIFY=$(docker_tls)"
+       echo "set -x DOCKER_CERT_PATH=$(docker_cert_path)"
+    else
+      echo "set -e DOCKER_TLS_VERIFY"
+    fi
   else
     echo "export DOCKER_HOST=tcp://$(docker_ip):${DOCKER_PORT:-2375}"
+    # if DOCKER_TLS_VERIFY exists docker assumes TLS, so unset to be certain
+    if [[ $(docker_tls) == 'yes' ]]; then
+       echo "export DOCKER_TLS_VERIFY=$(docker_tls)"
+       echo "export DOCKER_CERT_PATH=$(docker_cert_path)"
+    else
+      echo "unset DOCKER_TLS_VERIFY"
+    fi
   fi
 }
 
@@ -140,7 +184,8 @@ case "$1" in
   ip|i*)                docker_ip;;
   reload|rel*)          shift; exec_vagrant reload --provision "$@";;
   resume|res*)          shift; exec_vagrant resume "$@";;
-  ssh|ss*)              shift; exec_vagrant ssh "$@";;
+  ssh)                  shift; exec_vagrant ssh "$@";;
+  ssh-config)           shift; exec_vagrant ssh-config "$@";;
   status|stat*)         shift; exec_vagrant status "$@";;
   suspend|su*|pause|p)  shift; exec_vagrant suspend "$@";;
   up|u*|start|star*)    shift; exec_vagrant up --provision "$@";;

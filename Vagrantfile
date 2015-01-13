@@ -10,14 +10,17 @@ def shq(s)  # sh(1)-style quoting
 end
 
 ip      = ENV.fetch("DOCKER_IP", "192.168.42.43")
+# as of b2d 1.4.1 if TLS is used the port is hardcoded in the docker
+# daemon to be 2376
 port    = ENV.fetch("DOCKER_PORT", "2375")
+tls     = ENV.fetch("DOCKER_TLS", "yes")
 memory  = ENV.fetch("DOCKER_MEMORY", "512")
 cpus    = ENV.fetch("DOCKER_CPUS", "1")
 cidr    = ENV.fetch("DOCKER0_CIDR", "")
 args    = ENV.fetch("DOCKER_ARGS", "")
 
-b2d_version = "1.2.0"
-release_url = "https://github.com/fnichol/boot2docker-vagrant-box/releases/download/v#{b2d_version}"
+b2d_version = "1.4.1"
+release_url = "https://github.com/trystanleftwich/boot2docker-vagrant-box/releases/download/v#{b2d_version}"
 
 docker0_bridge_setup = ""
 bridge_utils_url     = "ftp://ftp.nl.netbsd.org/vol/2/metalab/distributions/tinycorelinux/4.x/x86/tcz/bridge-utils.tcz"
@@ -151,11 +154,23 @@ Vagrant.configure("2") do |config|
     if ! grep -q '8\.8\.8\.8' /etc/resolv.conf >/dev/null; then
       echo "nameserver 8.8.8.8" >> /etc/resolv.conf
     fi
-    if [ -s "$PROFILE" ]; then
+    if [ #{tls} == 'no' ]; then
+      echo "export DOCKER_TLS='#{tls}'" >> $PROFILE
+    else
+      # b2d starts the docker service during boot and it creates all the certfiles
+      # on the first run, I was having issues with the x509 certs being out of date
+      # so this is the only way I found to make sure that it worked everytime
+      sudo /etc/init.d/settime.sh
+      CERTDIR=`grep "CERTDIR:=" $INITD | awk -F= '{gsub("}",""); print $NF}'`
+      if [ -d $CERTDIR ]; then
+        rm $CERTDIR/*
+      fi
+    fi
+    if [[ -s "$PROFILE" || #{tls} == 'yes' ]]; then
       echo '---> Restarting docker daemon'
       sudo $INITD restart
+      echo "boot2docker: $(cat /etc/version)"
     fi
-    echo "boot2docker: $(cat /etc/version)"
   PREPARE
   config.vm.define :dvm
 end

@@ -209,6 +209,12 @@ As the core of dvm is a Vagrantfile (surprise!), you can simply download the dvm
 wget -O Vagrantfile http://git.io/dvm-vagrantfile
 ```
 
+## <a name="tls-support"></a> TLS support
+
+By default, the current (1.4.1 as of writing this) boot2docker vagrant image runs docker with TLS enabled. It auto-generates certificates and stores them in /home/docker/.docker inside the VM. The `dvm env` command will copy them to ~/.docker (Or the path you have set for `DOCKER_CERT_PATH` in your `dvm.conf`) on your local machine once the VM has started, and output the correct values for the `DOCKER_CERT_PATH` and `DOCKER_TLS_VERIFY` environment variables.
+
+We strongly recommend against running dvm with an unencrypted Docker socket for security reasons, but if you have tools that cannot be easily switched, you can disable it by changing `DOCKER_TLS` in `$HOME/.dvm/dvm.conf`.
+
 ## <a name="configuration"></a> Configuration
 
 If you wish to change the Docker TCP port or memory settings of the virtual machine, edit `$HOME/.dvm/dvm.conf` for the configuration to be used. By default the following configuration is used:
@@ -218,6 +224,8 @@ If you wish to change the Docker TCP port or memory settings of the virtual mach
 * `DOCKER_MEMORY`: `512` (in MB)
 * `DOCKER_CPUS`: `1`
 * `DOCKER_ARGS`: `-H unix:// -H tcp://`
+* `DOCKER_TLS`: `yes`
+* `DOCKER_CERT_PATH`: `$HOME/.docker`
 
 If you wish to change the network range Docker uses for the `docker0` bridge, set `DOCKER0_CIDR` to the range required.
 
